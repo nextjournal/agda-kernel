@@ -86,6 +86,7 @@ class AgdaKernel(Kernel):
 
     def __init__(self, **kwargs):
         Kernel.__init__(self, **kwargs)
+        self.print("Booting Agda Kernel - Nextjournal Edition")
         self.agda_version = self.readAgdaVersion()
 
     # return line and column of an position in a string
@@ -837,6 +838,7 @@ class AgdaKernel(Kernel):
 
                 if result.find("Listing solution(s)") != -1:
                     matches += self.listing_solution_parser(result)
+                    matches += ["{! !}"] # always give option to also try case splitting or give
                 elif error or result in ["No solution found", "No candidate found", "No solution found after timeout (1000ms)"]:
                      matches = ["{! !}"] # transform "?" into "{! !}" when Agsy fails
                 else:
@@ -844,45 +846,45 @@ class AgdaKernel(Kernel):
                 
             # continue the chain if Agsy fails
             if self.isHole(exp) and (exp != "?" or matches == ["{! !}"]):
-
+                # try in order GIVE or REFINE and SPLIT
                 # first, try to replace the hole with its current contents
-                result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_GIVE)
+                hole_content = self.get_hole_content(exp)
+                if hole_content is not None:
+                    result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_GIVE)
+                    self.print(f'AGDA_CMD_GIVE, result: {result}, error: {error}')
+                    if result == "OK":
+                        # add hole content to results
+                        result = "(" + hole_content + ")"
+                        self.print(f'gave hole: {result}')
+                        matches += [result]
 
-                self.print(f'AGDA_CMD_GIVE, result: {result}, error: {error}')
-
+                # second, try to automatically refine the current contents if give fails
                 if error:
-                    # second, try to automatically refine the current contents
                     result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_REFINE_OR_INTRO)
+                    self.print(f'AGDA_CMD_REFINE_OR_INTRO, result: {result}, error: {error}')
+                    if (not error) and (result != "OK"):
+                        # in this case result is a refined goal and we can add
+                        # the result to matches
+                        matches += [result]
 
-                    if error: # try case
-                        # need to reload to make it work (??)
-                        _, _ = self.runCmd(code, -1, -1, "", AGDA_CMD_LOAD)
-
-                        # third, try to introduce a case analysis
-                        result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_MAKE_CASE)
-
-                        if error or result == "OK":
-                            cursor_start, cursor_end = cursor_pos, cursor_pos
-                            result = ""
-                        else:
-                            # need to replace the current row with result
-                            while cursor_start > 0 and code[cursor_start - 1] != "\n":
-                                cursor_start -= 1
-                            while cursor_end < length and code[cursor_end] != "\n":
-                                cursor_end += 1
-                    elif result == "OK":
-                        # cannot close the hole
-                        result1 = re.search(r'\{! *(.*) *!\}', exp).group(1).strip()
-                        self.print(f'not closing hole: {result1}')
-                    else:
-                        # in this case result is a refined goal and we can refine the hole
-                        result = result
-                elif result == "OK":
-                    # close the hole
-                    result = "(" + re.search(r'\{! *(.*) *!\}', exp).group(1).strip() + ")"
-                    self.print(f'gave hole: {result}')
-
-                matches = [result] if result != "" else []
+                # third, try to introduce a case analysis if a hint is given
+                if (hole_content is not None) and (hole_content != ""):
+                    # need to reload to make it work (??)
+                    _, _ = self.runCmd(code, -1, -1, "", AGDA_CMD_LOAD)
+                    result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_MAKE_CASE)
+                    self.print(f'AGDA_CMD_MAKE_CASE, result: {result}, error: {error}')
+                    if (not error) and result != "OK":
+                        # need to replace the current row with result
+                        split_cursor_start, split_cursor_end = cursor_start, cursor_end
+                        while split_cursor_start > 0 and code[split_cursor_start - 1] != "\n":
+                            split_cursor_start -= 1
+                        while split_cursor_end < length and code[split_cursor_end] != "\n":
+                            split_cursor_end += 1
+                        # NOTE: jupyter clients in general don't support a per-match replacement range
+                        #       this is a nextjournal specific feature
+                        matches += [{'text': result,
+                                     'cursor_start': split_cursor_start,
+                                     'cursor_end':   split_cursor_end}]
 
             self.print(f'exp: {exp}, matches: {matches}')
 
@@ -892,10 +894,14 @@ class AgdaKernel(Kernel):
                 cursor_start, cursor_end = cursor_start_orig, cursor_end_orig
                 self.print(f'cursor_start: {cursor_start}, cursor_end: {cursor_end}')
                 error = False
-    
+
         return {'matches': matches, 'cursor_start': cursor_start,
                 'cursor_end': cursor_end, 'metadata': {},
                 'status': 'ok' if not error else 'error'}
+
+    def get_hole_content(self, exp):
+        if re.match(r'\{! *(.*) *!\}', exp):
+            return re.search(r'\{! *(.*) *!\}', exp).group(1).strip()
 
     def listing_solution_parser(self, str):
         # example: Listing solution(s) 0-9\n0  cong suc (+-assoc m n p)\n1  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m p p)) ⟩\nsuc (m + (n + p)) ∎\n2  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m p n)) ⟩\nsuc (m + (n + p)) ∎\n3  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m p m)) ⟩\nsuc (m + (n + p)) ∎\n4  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m n p)) ⟩\nsuc (m + (n + p)) ∎\n5  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m n n)) ⟩\nsuc (m + (n + p)) ∎\n6  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m n m)) ⟩\nsuc (m + (n + p)) ∎\n7  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m m p)) ⟩\nsuc (m + (n + p)) ∎\n8  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m m n)) ⟩\nsuc (m + (n + p)) ∎\n9  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m m m)) ⟩\nsuc (m + (n + p)) ∎\n
