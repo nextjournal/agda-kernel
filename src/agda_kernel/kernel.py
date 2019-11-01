@@ -849,13 +849,14 @@ class AgdaKernel(Kernel):
                 # try in order GIVE or REFINE and SPLIT
                 # first, try to replace the hole with its current contents
                 hole_content = self.get_hole_content(exp)
-                result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_GIVE)
-                self.print(f'AGDA_CMD_GIVE, result: {result}, error: {error}')
-                if result == "OK":
-                    # add hole content to results
-                    result = "(" + hole_content + ")"
-                    self.print(f'gave hole: {result}')
-                    matches += [result]
+                if hole_content is not None:
+                    result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_GIVE)
+                    self.print(f'AGDA_CMD_GIVE, result: {result}, error: {error}')
+                    if result == "OK":
+                        # add hole content to results
+                        result = "(" + hole_content + ")"
+                        self.print(f'gave hole: {result}')
+                        matches += [result]
 
                 # second, try to automatically refine the current contents if give fails
                 if error:
@@ -899,7 +900,8 @@ class AgdaKernel(Kernel):
                 'status': 'ok' if not error else 'error'}
 
     def get_hole_content(self, exp):
-        return re.search(r'\{! *(.*) *!\}', exp).group(1).strip()
+        if re.match(r'\{! *(.*) *!\}', exp):
+            return re.search(r'\{! *(.*) *!\}', exp).group(1).strip()
 
     def listing_solution_parser(self, str):
         # example: Listing solution(s) 0-9\n0  cong suc (+-assoc m n p)\n1  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m p p)) ⟩\nsuc (m + (n + p)) ∎\n2  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m p n)) ⟩\nsuc (m + (n + p)) ∎\n3  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m p m)) ⟩\nsuc (m + (n + p)) ∎\n4  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m n p)) ⟩\nsuc (m + (n + p)) ∎\n5  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m n n)) ⟩\nsuc (m + (n + p)) ∎\n6  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m n m)) ⟩\nsuc (m + (n + p)) ∎\n7  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m m p)) ⟩\nsuc (m + (n + p)) ∎\n8  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m m n)) ⟩\nsuc (m + (n + p)) ∎\n9  begin\nsuc (m + n + p) ≡⟨ cong suc (+-assoc m n p) ⟩\nsuc (m + (n + p)) ≡⟨\nsym (cong (λ _ → suc (m + (n + p))) (+-assoc m m m)) ⟩\nsuc (m + (n + p)) ∎\n
