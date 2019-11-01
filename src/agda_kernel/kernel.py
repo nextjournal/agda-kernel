@@ -906,8 +906,8 @@ class AgdaKernel(Kernel):
         solutions = re.split('\n[0-9]+ +', str)[1:] # skip the first line
 
         # need to insert two extra space for multiline solutions in order to preserve indentation
-        solutions = [ '\n  '.join(re.split('\n', solution)) for solution in solutions] 
-        
+        solutions = [ '\n  '.join(re.split('\n', solution)).strip() for solution in solutions]
+
         self.print(f"solutions is: {solutions}")
         #    solution = " ".join(tokens[2:]) # skip the first "20  " (plus the extra space!) and put the tokens back
         return solutions
