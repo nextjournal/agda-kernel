@@ -562,11 +562,11 @@ class AgdaKernel(Kernel):
             elif cursor_pos - len(code) >= 0 and cursor_pos <= len(self.code) and self.code[cursor_pos-len(code):cursor_pos] == code:
                 #self.print(f'we are in a selected text, cursor at the end')
                 cursor_start, cursor_end, exp = cursor_pos - len(code), cursor_pos, code
+            # the cursor is anywhere in the selection
             else:
-                error = True
-                self.print(f'no other case possible: the cursor is either at the beginning or at the end of a selection')
-                #return {'status': 'ok', 'found': True, 'data': {'text/plain': 'load the cell first'}, 'metadata': {}}
-        # we are not in a selection, or an error above occurred
+                self.print("Consider the whole code (preamble + selection) to find expression to be inspected")
+                return self.find_expression(self.code, len(self.code) - len(code) + cursor_pos)
+
         else: # if exp == "":
             cursor_start, cursor_end, exp = self.find_expression(code, cursor_pos)
             #cursor_start += 1
