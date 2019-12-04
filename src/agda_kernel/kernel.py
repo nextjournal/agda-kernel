@@ -185,13 +185,12 @@ class AgdaKernel(Kernel):
 
         #look for the first line matching "module name where"
         for line in lines:
-            if bool(re.match(r'module *[a-zA-Z0-9.\-]* *where', line)):
-                # fileName = "tmp/" + re.sub(r"-- *", "", firstLine)
-                moduleName = re.sub(r'module *', "", line) # delete prefix
-                moduleName = re.sub(r' *where.*', "", moduleName) # delete suffix
-
-                return moduleName
-
+            # line matches a module declaration (not module application)
+            if bool(re.match(r'module *.* *where', line, re.UNICODE)):
+                # capture text up to first space (excluding parameters)
+                m = re.match(r'module *([\S]*) ', line, re.UNICODE)
+                if m and (len(m.groups()) > 0):
+                    return m.groups()[0].strip()
         return ""
 
     def getFileName(self, code):
