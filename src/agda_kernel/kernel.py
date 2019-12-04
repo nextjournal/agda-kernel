@@ -273,7 +273,17 @@ class AgdaKernel(Kernel):
             if dirName != "" and not os.path.exists(dirName):
                 os.makedirs(dirName)
 
-            fileHandle = open(fileName, "w+")
+            try:
+                fileHandle = open(fileName, "w+")
+            except:
+                message = "Submitted code: \n\n" + code
+                self.send_response(self.iopub_socket, 'stream', {'name': 'stdout', 'text': message})
+                return {'status': 'error',
+                        'execution_count': self.execution_count,
+                        'payload': [],
+                        'evalue': "Can't infer a valid file name from top module declaration.",
+                        'user_expressions': {}
+                        }
 
             for i in range(numLines):
                 fileHandle.write("%s\n" % lines[i])
