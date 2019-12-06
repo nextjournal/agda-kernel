@@ -289,8 +289,13 @@ class AgdaKernel(Kernel):
                         'user_expressions': {}
                         }
 
+            if '.lagda.md' in fileName:
+                fileHandle.write("```agda\n")
             for i in range(numLines):
                 fileHandle.write("%s\n" % lines[i])
+
+            if '.lagda.md' in fileName:
+                fileHandle.write("```\n")
 
             fileHandle.close()
 
