@@ -194,16 +194,20 @@ class AgdaKernel(Kernel):
         return ""
 
     def getFileName(self, code):
-
         moduleName = self.getModuleName(code)
-        return moduleName.replace(".", "/") + ".agda" if moduleName != "" else ""
+        if moduleName is "":
+            return ""
+        if 'AGDA_KERNEL_EXT' in os.environ:
+            ext = os.environ['AGDA_KERNEL_EXT']
+        else:
+            ext = 'agda'
+        fileName = moduleName.replace(".", "/") + '.' + ext
+        if 'AGDA_KERNEL_SRC' in os.environ:
+            return os.environ['AGDA_KERNEL_SRC'] + fileName
+        return fileName
 
     def getDirName(self, code):
-
-        moduleName = self.getModuleName(code)
-        last = moduleName.rfind(".")
-        prefixName = moduleName[:last]
-        return prefixName.replace(".", "/") if last != -1 else ""
+        return os.path.dirname(self.getFileName(code))
 
     def do_shutdown(self, restart):
         return
