@@ -666,6 +666,15 @@ class AgdaKernel(Kernel):
             if not error:
                 return {'status': 'ok', 'found': True, 'data': {'text/plain': result}}
             else:
+                self.print(f"Infer Error: '{error}' - '{result}'")
+                # FIXME: this is giving problems with preambled cells (self.code != code)
+                # in presence of multiple open holes, when inspecting earlier
+                # holes after having inspected some hole below.
+                # The `return` below just tries to surface the problem
+                # i.e. `exp` is the whole `code` when we reach here, but doesn't
+                # fix the issue. 
+                return {'status': 'ok', 'found': False, 'data': {'text/plain': f"Can't infer toplevel expression: '{exp}'."}}
+
                 # if we are not in a hole,
                 # create an artificial hole around the current selection and reload
                 self.code = self.code[:cursor_start-1] + "{! " + exp + " !}" + self.code[cursor_end:]
