@@ -646,7 +646,7 @@ class AgdaKernel(Kernel):
 
         self.print(f'do_inspect cursor_pos: {cursor_pos}, selection: "{code}" of length {len(code)}, code: "{self.code}" of length {len(self.code)}')
 
-        if self.code == "" or not code[:cursor_pos] in self.code:
+        if self.code == "" or not code in self.code:
             return {'status': 'error', 'found': True, 'data': {'text/plain': "must load the cell first"}}
 
         # load the code to check that there are no errors
@@ -655,7 +655,7 @@ class AgdaKernel(Kernel):
         if response['status'] == 'error':
             return {'status': 'error', 'found': False, 'data': {'text/plain': "unable to inspect, the code contain errors"}}
 
-        cursor_start, cursor_end, exp = self.get_expression(code[:cursor_pos], cursor_pos)
+        cursor_start, cursor_end, exp = self.get_expression(code, cursor_pos)            
         # self.print(f'current exp: "{exp}", pos: {cursor_pos}, start: {cursor_start}, end: {cursor_end}')
 
         old_code = self.code
