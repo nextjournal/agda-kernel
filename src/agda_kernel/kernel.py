@@ -827,6 +827,13 @@ class AgdaKernel(Kernel):
             # load the current contents
             self.do_execute(code, False)
 
+            # the code submitted for completion is not the top cell:
+            # fixes wrong suggestions since code cursor would point at the wrong hole
+            if self.preamble and code != self.code:
+                self.print("We're completing while not in top cell.")
+                code = self.code
+                cursor_pos = cursor_pos + len(self.preamble)
+
             cursor_start_orig, cursor_end_orig, exp_orig = self.find_expression(code, cursor_pos)
             cursor_start, cursor_end = cursor_start_orig, cursor_end_orig
             exp = escapify(exp_orig)
