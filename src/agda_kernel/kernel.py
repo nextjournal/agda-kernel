@@ -86,7 +86,7 @@ class AgdaKernel(Kernel):
 
     def __init__(self, **kwargs):
         Kernel.__init__(self, **kwargs)
-        self.print("Booting Agda Kernel - Nextjournal Edition")
+        self.print("Booting Agda Kernel - Nextjournal Edition - 🔧Test Branch 🔧.")
         self.agda_version = self.readAgdaVersion()
 
     # return line and column of an position in a string
