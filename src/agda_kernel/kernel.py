@@ -705,229 +705,107 @@ class AgdaKernel(Kernel):
 
     # handle unicode completion here
     def do_complete(self, code, cursor_pos):
-
         #self.print(f'considering code: {code}, pos: {cursor_pos}')
-
-        half_subst = {
-            'Nat' : 'ℕ',
-            '<=<>' : '≤⟨⟩',
-            '<==<>' : '≤≡⟨⟩',
-            '=<>' : '≡⟨⟩',
-            '-><>' : '↝<>',
-            '->*<>' : '↝*<>',
-            'top' : '⊤',
-            'bot' : '⊥',
-            'neg' : '¬',
-            '/\\' : '∧',
-            '\\/' : '∨',
-            '\\' : 'λ', # it is important that this comes after /\
-            'Pi' : 'Π',
-            'Sigma' : 'Σ',
-            '->' : '→',
-            '→' :  '↦',
-            '↦' : '↝',
-            '↝' : '->',
-            '=>' : '⇒',
-            '<' : '⟨',
-            '>' : '⟩', # it is important that this comes after ->
-            '⟩' : '≻',
-            '≻' : '>',
-            'forall' : '∀',
-            'exists' : '∃',
-            'A' : '𝔸',
-            'B' : '𝔹',
-            'C' : 'ℂ',
-            'N' : 'ℕ',
-            'Q' : 'ℚ',
-            'R' : 'ℝ',
-            'Z' : 'ℤ',
-            ':=' : '≔',
-            '/=' : '≢',
-            'leq' : '≤',
-            '<=' : '≤',
-            'geq' : '≥',
-            '>=' : '≥',
-            '=' : '≡',
-            '[=' : '⊑',
-            'alpha' : 'α',
-            'beta' : 'β',
-            'gamma' : 'γ',
-            'rho' : 'ρ',
-            'e' : 'ε',
-            'mu' : 'μ',
-            'xor' : '⊗',
-            'emptyset' : '∅',
-            'qed' : '∎',
-            '.' : '·',
-            'd' : '∇',
-            'Delta' : 'Δ',
-            'delta' : 'δ',
-            'notin' : '∉',
-            'in' : '∈',
-            '[' : '⟦',
-            ']' : '⟧',
-            '::' : '∷',
-            '0' : '𝟬', # '𝟢',
-            '𝟬' : '₀',
-            '₀' : '0',
-            '1' : '𝟭', # '𝟣'
-            '𝟭' : '₁',
-            '₁' : '1',
-            '2' : '₂',
-            '3' : '₃',
-            '4' : '₄',
-            '5' : '₅',
-            '6' : '₆',
-            '7' : '₇',
-            '8' : '₈',
-            '9' : '₉',
-            '+' : '⨁',
-            '~' : '≈',
-            'x' : '×',
-            'o' : '∘',
-            'phi' : 'φ',
-            'psi' : 'ψ',
-            'xi' : 'ξ',
-            #'??' : "{! !}",
-            'iff' : '⟺',
-            'w'  : 'ω ',
-            'omega' : 'ω',
-            'Gamma' : 'Γ',
-            'tau' : 'τ',
-            'sigma' : 'σ',
-            #';' : ';', very bad idea: the second semicolon lloks the same but it is a different unicode symbol...
-            ';' : '⨟',
-            '(' : '⟬',
-            ')' : '⟭',
-            'b' : 'ᵇ',
-            'empty' : '∅',
-            '|-' : '⊢',
-            'models' : '⊨',
-            '|=' : '⊨',
-            'cup' : '⊔',
-            'l' : 'ℓ',
-            'op' : 'ᵒᵖ',
-            '{{' : '⦃',
-            '}}' : '⦄'
-        }
-
-        other_half = {val : key for (key, val) in half_subst.items() if val not in list(half_subst.keys())}
-        subst = {**half_subst, **other_half} # merge the two dictionaries
-        keys = [key for (key, val) in subst.items()]
 
         length = len(code)
         matches = []
         error = False
 
-        for key in keys:
-            n = len(key)
-            cursor_start = cursor_pos - n
-            cursor_end = cursor_pos
-            s = code[cursor_start:cursor_pos]
+        # load the current contents
+        self.do_execute(code, False)
 
-            if s == key:
-                # we have a match
-                matches = [subst[key]]
-                break
+        # the code submitted for completion is not the top cell:
+        # fixes wrong suggestions since code cursor would point at the wrong hole
+        if self.preamble and code != self.code:
+            self.print("We're completing while not in top cell.")
+            code = self.code
+            cursor_pos = cursor_pos + len(self.preamble)
 
-        # didn't apply a textual substitution
-        if matches == []:
+        cursor_start_orig, cursor_end_orig, exp_orig = self.find_expression(code, cursor_pos)
+        cursor_start, cursor_end = cursor_start_orig, cursor_end_orig
+        exp = escapify(exp_orig)
+        #cursor_start += 1
 
-            # load the current contents
-            self.do_execute(code, False)
-
-            # the code submitted for completion is not the top cell:
-            # fixes wrong suggestions since code cursor would point at the wrong hole
-            if self.preamble and code != self.code:
-                self.print("We're completing while not in top cell.")
-                code = self.code
-                cursor_pos = cursor_pos + len(self.preamble)
-
-            cursor_start_orig, cursor_end_orig, exp_orig = self.find_expression(code, cursor_pos)
-            cursor_start, cursor_end = cursor_start_orig, cursor_end_orig
-            exp = escapify(exp_orig)
-            #cursor_start += 1
-
-            if exp == "?":
-                # call Agsy, options: -c (case splitting) -m (hints) -r (refine) -l (list) -s k (select result k)
-                """options = lambda k: f'  -m -s {k}  '
-                k = 0
-                while True:
-                    result, error = self.runCmd(code, cursor_start, cursor_end, options(k), AGDA_CMD_AUTOONE)
-                    self.print(f'result is: {result}, error is: {error}')
-                    if error or result in ["No solution found", "No candidate found", "Only 1 solution found", f'Only {k} solutions found']:
-                        if matches == []:
-                            matches = ["{! !}"] # transform "?" into "{! !}" when Agsy fails
-
-                        break
-                    else:
-                        matches += [result] if result != "" else []
-
-                    k += 1
-                """
-                options = "-m -l" # list solutions
-                self.print(f'Agsy options are: {options}')
-                result, error = self.runCmd(code, cursor_start, cursor_end, options, AGDA_CMD_AUTOONE if self.agda_version >= "2.5.4" else AGDA_CMD_AUTO)
+        if exp == "?":
+            # call Agsy, options: -c (case splitting) -m (hints) -r (refine) -l (list) -s k (select result k)
+            """options = lambda k: f'  -m -s {k}  '
+            k = 0
+            while True:
+                result, error = self.runCmd(code, cursor_start, cursor_end, options(k), AGDA_CMD_AUTOONE)
                 self.print(f'result is: {result}, error is: {error}')
+                if error or result in ["No solution found", "No candidate found", "Only 1 solution found", f'Only {k} solutions found']:
+                    if matches == []:
+                        matches = ["{! !}"] # transform "?" into "{! !}" when Agsy fails
 
-                if result.find("Listing solution(s)") != -1:
-                    matches += self.listing_solution_parser(result)
-                    matches += ["{! !}"] # always give option to also try case splitting or give
-                elif error or result in ["No solution found", "No candidate found", "No solution found after timeout (1000ms)"]:
-                     matches = ["{! !}"] # transform "?" into "{! !}" when Agsy fails
+                    break
                 else:
-                    self.print(f'Unexpected answer: {result}, error is: {error}')
-                
-            # continue the chain if Agsy fails
-            if self.isHole(exp) and (exp != "?" or matches == ["{! !}"]):
-                # try in order GIVE or REFINE and SPLIT
-                # first, try to replace the hole with its current contents
-                hole_content = self.get_hole_content(exp)
-                if hole_content is not None:
-                    result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_GIVE)
-                    self.print(f'AGDA_CMD_GIVE, result: {result}, error: {error}')
-                    if result == "OK":
-                        # add hole content to results
-                        result = "(" + hole_content + ")"
-                        self.print(f'gave hole: {result}')
-                        matches += [result]
+                    matches += [result] if result != "" else []
 
-                # second, try to automatically refine the current contents if give fails
-                if error:
-                    result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_REFINE_OR_INTRO)
-                    self.print(f'AGDA_CMD_REFINE_OR_INTRO, result: {result}, error: {error}')
-                    if (not error) and (result != "OK"):
-                        # in this case result is a refined goal and we can add
-                        # the result to matches
-                        matches += [result]
+                k += 1
+            """
+            options = "-m -l" # list solutions
+            self.print(f'Agsy options are: {options}')
+            result, error = self.runCmd(code, cursor_start, cursor_end, options, AGDA_CMD_AUTOONE if self.agda_version >= "2.5.4" else AGDA_CMD_AUTO)
+            self.print(f'result is: {result}, error is: {error}')
 
-                # third, try to introduce a case analysis if a hint is given
-                if (hole_content is not None) and (hole_content != ""):
-                    # need to reload to make it work (??)
-                    _, _ = self.runCmd(code, -1, -1, "", AGDA_CMD_LOAD)
-                    result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_MAKE_CASE)
-                    self.print(f'AGDA_CMD_MAKE_CASE, result: {result}, error: {error}')
-                    if (not error) and result != "OK":
-                        # need to replace the current row with result
-                        split_cursor_start, split_cursor_end = cursor_start, cursor_end
-                        while split_cursor_start > 0 and code[split_cursor_start - 1] != "\n":
-                            split_cursor_start -= 1
-                        while split_cursor_end < length and code[split_cursor_end] != "\n":
-                            split_cursor_end += 1
-                        # NOTE: jupyter clients in general don't support a per-match replacement range
-                        #       this is a nextjournal specific feature
-                        matches += [{'text': result,
-                                     'cursor_start': split_cursor_start,
-                                     'cursor_end':   split_cursor_end}]
+            if result.find("Listing solution(s)") != -1:
+                matches += self.listing_solution_parser(result)
+                matches += ["{! !}"] # always give option to also try case splitting or give
+            elif error or result in ["No solution found", "No candidate found", "No solution found after timeout (1000ms)"]:
+                 matches = ["{! !}"] # transform "?" into "{! !}" when Agsy fails
+            else:
+                self.print(f'Unexpected answer: {result}, error is: {error}')
 
-            self.print(f'exp: {exp}, matches: {matches}')
+        # continue the chain if Agsy fails
+        if self.isHole(exp) and (exp != "?" or matches == ["{! !}"]):
+            # try in order GIVE or REFINE and SPLIT
+            # first, try to replace the hole with its current contents
+            hole_content = self.get_hole_content(exp)
+            if hole_content is not None:
+                result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_GIVE)
+                self.print(f'AGDA_CMD_GIVE, result: {result}, error: {error}')
+                if result == "OK":
+                    # add hole content to results
+                    result = "(" + hole_content + ")"
+                    self.print(f'gave hole: {result}')
+                    matches += [result]
 
-            # always replace "?" with a hole in case there is no match
-            if exp == "?" and matches == []:
-                matches = ["{! !}"]
-                cursor_start, cursor_end = cursor_start_orig, cursor_end_orig
-                self.print(f'cursor_start: {cursor_start}, cursor_end: {cursor_end}')
-                error = False
+            # second, try to automatically refine the current contents if give fails
+            if error:
+                result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_REFINE_OR_INTRO)
+                self.print(f'AGDA_CMD_REFINE_OR_INTRO, result: {result}, error: {error}')
+                if (not error) and (result != "OK"):
+                    # in this case result is a refined goal and we can add
+                    # the result to matches
+                    matches += [result]
+
+            # third, try to introduce a case analysis if a hint is given
+            if (hole_content is not None) and (hole_content != ""):
+                # need to reload to make it work (??)
+                _, _ = self.runCmd(code, -1, -1, "", AGDA_CMD_LOAD)
+                result, error = self.runCmd(code, cursor_start, cursor_end, exp, AGDA_CMD_MAKE_CASE)
+                self.print(f'AGDA_CMD_MAKE_CASE, result: {result}, error: {error}')
+                if (not error) and result != "OK":
+                    # need to replace the current row with result
+                    split_cursor_start, split_cursor_end = cursor_start, cursor_end
+                    while split_cursor_start > 0 and code[split_cursor_start - 1] != "\n":
+                        split_cursor_start -= 1
+                    while split_cursor_end < length and code[split_cursor_end] != "\n":
+                        split_cursor_end += 1
+                    # NOTE: jupyter clients in general don't support a per-match replacement range
+                    #       this is a nextjournal specific feature
+                    matches += [{'text': result,
+                                 'cursor_start': split_cursor_start,
+                                 'cursor_end':   split_cursor_end}]
+
+        self.print(f'exp: {exp}, matches: {matches}')
+
+        # always replace "?" with a hole in case there is no match
+        if exp == "?" and matches == []:
+            matches = ["{! !}"]
+            cursor_start, cursor_end = cursor_start_orig, cursor_end_orig
+            self.print(f'cursor_start: {cursor_start}, cursor_end: {cursor_end}')
+            error = False
 
         return {'matches': matches, 'cursor_start': cursor_start,
                 'cursor_end': cursor_end, 'metadata': {},
